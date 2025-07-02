@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http.Headers;
+using System.Reflection.Metadata;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -9,14 +11,14 @@ namespace ZCYH.Zhang.Help
 {
     public class Http
     {
-        public static string Get(string url)
+        public static async Task<string> GetAsync(string url)
         {
             using (var client = new System.Net.Http.HttpClient())
             {
-                var response = client.GetAsync(url).Result;
+                var response = await client.GetAsync(url);
                 if (response.IsSuccessStatusCode)
                 {
-                    return response.Content.ReadAsStringAsync().Result;
+                    return await response.Content.ReadAsStringAsync();
                 }
                 else
                 {
@@ -24,21 +26,27 @@ namespace ZCYH.Zhang.Help
                 }
             }
         }
-        public static async Task<T> Post<T>(string url, object body)
+
+        public static async Task<T> PostAsync<T>(string url, object body)
         {
-            var json = JsonSerializer.Serialize(body);
-            using (var client = new System.Net.Http.HttpClient())
+            try
             {
-                var response = client.PostAsync(url, new System.Net.Http.StringContent(json, Encoding.UTF8, "application/json")).Result;
-                if (response.IsSuccessStatusCode)
+                var bytes = JsonSerializer.SerializeToUtf8Bytes(body);
+                using (var client = new System.Net.Http.HttpClient())
                 {
-                    var result = response.Content.ReadAsStringAsync().Result;
-                    return await JsonSerializer.DeserializeAsync<T>(result);
+                    var content = new ByteArrayContent(bytes)
+                    {
+                        Headers = { ContentType = MediaTypeHeaderValue.Parse("application/json") }
+                    };
+                    using var resp = await client.PostAsync(url, content);
+                    resp.EnsureSuccessStatusCode();
+                    var str = await resp.Content.ReadAsStringAsync();
+                    return JsonSerializer.Deserialize<T>(str);
                 }
-                else
-                {
-                    //return
-                }
+            }
+            catch (Exception ex)
+            {
+                return default;
             }
         }
     }
